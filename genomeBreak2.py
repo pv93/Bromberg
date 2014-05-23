@@ -45,7 +45,9 @@ def breakSequence(sequence, numOfReads, minSize, maxSize, outputfilename):
         count += 1
         if count%10 == 0: # write to file every time size(reads) gets to 10
             for x in reads:
-                output.write( '> ' + x.name + ', ' + str(x.start) + ' - ' + str(x.finish) + ', ' + str(x.numOfGenes) + ', ' + ', '.join(map(str, x.genelist)) + '\n' + x.subseq + '\n' + '\n')
+                if x.numOfGenes == 0: bar = ''
+                else: bar = '|' # so that an extra '|' is not shown if there are 0 genes
+                output.write( '> ' + x.name + '|' + str(x.start) + '-' + str(x.finish) + '|' + str(x.numOfGenes) + bar + '|'.join(map(str, x.genelist)) + '\n' + x.subseq + '\n' + '\n')
             del reads[:]
     output.close()
             
