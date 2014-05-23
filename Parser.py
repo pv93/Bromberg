@@ -2,7 +2,7 @@ import argparse
 import os.path
 import dictbuild
 
-parser = argparse.ArgumentParser("This is the big kahuna. No more games")
+parser = argparse.ArgumentParser("Parser used to scan .ptt and .out files")
 parser.add_argument('-p', '--ptt', help = 'The ptt file(s) to be used', nargs = '*')
 parser.add_argument('-o', '--out', help = 'The .out file to be used')
 parser.add_argument('-d', '--dest', help = 'Destination of output files')
