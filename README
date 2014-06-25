@@ -1,3 +1,15 @@
 This is a bioinformatics project done at the Bromberg Lab at Rutgers University.
 
-It is a metagenomics experiment.
+It is a metagenomics experiment, separated into 6 steps:
+
+1) Obtain a genome and break it up into n fragments of desired size range.
+2) Translate these fragments directly to their corresponding peptide, further splitting fragments by stop codons, and
+filtering those fragments with len < 11
+3) Perform a PSI-BLAST on the fragments against a specified library
+4) Make an 'outfile' of the results of the PSI-BLAST
+5) Parse this outfile, looking for queries that hit a different gene with the same function (specified by COG family)
+6) Mathematics and statistics (magic)
+
+These steps will return a graph that gives us a curve. We can then plot a 'test set' onto this graph, and based on the
+distances between each member of the set and the curve, it is possible to determine the function of that member, even if
+we do not know the COG family.
