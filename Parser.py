@@ -1,11 +1,10 @@
 import argparse
 import os, os.path
-#import cPickle as pickle
 import marshal
 import re
 
 parser = argparse.ArgumentParser("Parser used to scan .out files")
-parser.add_argument('-p', '--pcd', help = 'The { PID : COG } dictionary used to build the { PID : COG } dictionary, must be in .pickle format')
+parser.add_argument('-p', '--pcd', help = 'The { PID : COG } dictionary used to build the { PID : COG } dictionary, must be a serialized dictionary')
 parser.add_argument('-o', '--out', help = 'The .out file to be used')
 parser.add_argument('-d', '--dest', help = 'Destination of output files')
 parser.add_argument('-i', '--iter', type = int, default= 1, help ="Iteration of psi-blast to use")
@@ -47,21 +46,52 @@ fp1count = 0 # FALSE POSITIVE 1 | query has PID, query has COG, hits subject PID
 fp1file = open(outfile + " false positives 1.txt", 'w')
 
 testset = open(outfile + " test set.txt", 'w') # TEST SET | query has PID, query has COG, hits subject PID, with ~NO~ COG 
-                                               # OR         query has PID, query has no COG, hits PID
+tscount = 0                                    # OR         query has PID, query has no COG, hits PID
 
 fncount = 0 # FALSE NEGATIVE | query has PID, query has COG, hits nothing
 
 uneg = 0 # UNCERTAIN NEGATIVES | query has PID, query has no COG, hits nothing
 
-def write(query, hit, filetype):
+def write_to_file(query, hit, filetype):
+    
+    split_result = hit.split('\t')
+    get_hit = split_result[1].split('|')
+    
+    ident = split_result[2]
+    effective_length = 1 ##### Ask Chengsheng what this is again
+    evalue = split_result[5]
+    query_pid = query[-1]
+    hit_pid = get_hit[1]
+
+    if query_pid in cogdict:
+        query_cog = cogdict[pid]
+    else:
+        query_cog = '-'
+
+    if hit_pid in cogdict:
+        hit_cog = cogdict[pid]
+    else:
+        hit_cog = '-'
+    
     if filetype == "testset":
         if os.stat(testset).st_size == 0:
             testset.write("# This is the test set. Here you can find the queries that have PID's and COG's, that hit proteins without COG's. \n # In addition, queries with PIDS but no COG family that hit subjects (regardless of whether the subject has a COG family or not) also go into this file.")
-            testset.write("Query\tSubject\t
+            testset.write("Query\tQuery COG\tSubject\tSubject COG\t% ident\tEffective Length\tE-value")
+    elif filetype == 'fp2file':
+        if os.stat(fp2file).st_size == 0:
+            fp2file.write('# This is the false positives 2 file. Here you can find all results that have no PID or that do not hit themselves, but they hit a subject, that has a COG family.')
+            fp2file.write("Query\tQuery COG\tSubject\tSubject COG\t% ident\tEffective Length\tE-value")
+    elif filetype == 'tpfile':
+        if os.stat(tpfile).st_size == 0:
+            tpfile.write('# This is the true positives file. Here you can find all results that have PID annotation, and hit other PIDs from the same COG family.')
+            tpfile.write("Query\tQuery COG\tSubject\tSubject COG\t% ident\tEffective Length\tE-value")
+    elif filetype == 'fp1file':
+        if os.stat(fp1file).st_size == 0:
+            fp1file.write('# This is the false positives 1 file. Here you can find all results that have PIDs and hit a subject from a different COG family.')
+            fp1file.write("Query\tQuery COG\tSubject\tSubject COG\t% ident\tEffective Length\tE-value")
         
-        
-    
-
+    filetype.write(query + '\t' + query_cog + pid + '\t' + hit_cog + '\t' + ident + '\t' + effective_length + '\t' + evalue)
+            
 def self_hit_check(pid, hits):
     for hit in hits:
         split1 = hit.split('\t')
@@ -81,11 +111,11 @@ def evaluate_hits(query, list_of_hits, dictionary):
     if len(pids) == 0:
         nopid = True
 
-    if nopid and nohits:    # TRUE NEGATIVE 2
+    if nopid and nohits:    # TRUE NEGATIVE 2 - in the case where there is no pid
         global tn2count += 1
         return
 
-    elif nopid and not nohits: # TRUE NEGATIVE 1 & FALSE POSITIVE 2
+    elif nopid and not nohits: # TRUE NEGATIVE 1 & FALSE POSITIVE 2 - in the case where there is no pid
         for hit in hits:
             get_hit = hit.split('\t')[1]
             hit_pid = get_hit.split('|')[1]
@@ -98,11 +128,10 @@ def evaluate_hits(query, list_of_hits, dictionary):
             
             
 
-    track_self_hits = [] # let's try this
     for pid in pids:
-        self_hit = self_hit_check(pid, list_of_hits)
+        self_hit = self_hit_check(pid, list_of_hits) # A PID that doesn't hit itself is counted as if it doesn't exist
 
-        if not self_hit and nohits:    # TRUE NEGATIVE 2 ... copy and pasting. should find a way to avoid doing this
+        if not self_hit and nohits:    # TRUE NEGATIVE 2
             global tn2count += 1
             return
     
@@ -116,32 +145,55 @@ def evaluate_hits(query, list_of_hits, dictionary):
                 else:                   #FP2
                     global tn1count += 1
 
-        ## Now we have covered the cases where there is no PID or no self-hit. 
+        ## Now we have covered the cases where there is no PID or no self-hit. Further entries will always have a PID and self-hit... 
 
         else:
             if pid in cogdict:
+                
+                if nohits: # FALSE NEGATIVE
+                    global fncount += 1
+               
+                else:
+                    for hit in hits:
+                        get_hit = hit.split('\t')[1]
+                        hit_pid = get_hit.split('|')[1]
+
+                        if hit_pid in cogdict:
+                            if cogdict[hit_pid] == cogdict[pid]:    # TRUE POSITIVE
+                                x = query[:2]
+                                xy = x.append(pid)
+                                write_to_file(xy, hit, "tpfile")
+                                global tpcount += 1
+                            else:                                   # FALSE POSITIVE 1
+                                x = query[:2]
+                                xy = x.append(pid)
+                                write_to_file(xy, hit, "fp1file")
+                                global fp1count += 1
+                        else:                                          # TEST SET - hit has no COG
+                            x = query[:2]
+                            xy = x.append(pid)
+                            write_to_file(xy, hit, "testset")
+                            global tscount += 1
+
+
+                
 
             else:
-               if nohits:
+               if nohits:   # UNCERTAIN NEGATIVES
                    uneg += 1
-                else:
-                    write
-            
-                
-        
-    
-    
-    
-
-
-
+                else:       # TEST SET - recall this means that our query has no COG, but has hits - we don't care whether the hits are in COG fams or not.
+                    x = query[:2]
+                    xy = x.append(pid) # dumb, but ensures that we look at each pid separately
+                    for hit in hits:
+                        write_to_file(xy, hit, "testset")
+                        global tscount += 1
+                    
+                    
 # Parsing, note that this method is extremely dependent on the format of the outfile,
 # something that should be addressed in future releases
 with open(outfile, 'r') as ofile:
     
-
-       # Parsing begins ... abandon hope all ye who enter
-    
+    # Determining which iteration to use
     rfile = ofile.readlines()
     for i, line in enumerate(rfile):
         
